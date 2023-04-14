@@ -1,6 +1,7 @@
-package fork
+package fork_test
 
 import (
+	"fork"
 	"sort"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 func TestForkSliceToSlice(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
 	output := []int{0, 1, 4, 9, 16, 25}
-	squares := Slice[int, int](input).
+	squares := fork.Slice[int, int](input).
 		Parallelism(3).
 		ToSlice(squareFn)
 
@@ -20,7 +21,7 @@ func TestForkSliceToSlice(t *testing.T) {
 func TestForkSliceToChan(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
 	output := []int{0, 1, 4, 9, 16, 25}
-	squares := Slice[int, int](input).
+	squares := fork.Slice[int, int](input).
 		Parallelism(3).
 		ToChan(squareFn)
 	var result []int
@@ -44,7 +45,7 @@ func TestForkFromChanToSlice(t *testing.T) {
 	}
 	close(input)
 
-	squares := Chan[int, int](input).
+	squares := fork.Chan[int, int](input).
 		Parallelism(2).
 		ToSlice(squareFn)
 
@@ -60,7 +61,7 @@ func TestForkFromChanToChan(t *testing.T) {
 	}
 	close(input)
 
-	squares := Chan[int, int](input).
+	squares := fork.Chan[int, int](input).
 		Parallelism(2).
 		ToChan(squareFn)
 
@@ -78,7 +79,7 @@ func TestForkFromChanToChan(t *testing.T) {
 
 func TestForkEarlyExitOnSlice(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
-	squares := Slice[int, int](input).
+	squares := fork.Slice[int, int](input).
 		Parallelism(3).
 		ToSlice(func(_ int) (int, bool) {
 			return 0, true
@@ -94,7 +95,7 @@ func TestForkEarlyExitOnChan(t *testing.T) {
 		input <- i
 	}
 	close(input)
-	squares := Chan[int, int](input).
+	squares := fork.Chan[int, int](input).
 		Parallelism(3).
 		ToChan(func(_ int) (int, bool) {
 			return 0, true
@@ -110,7 +111,7 @@ func TestForkMapKeysToSlice(t *testing.T) {
 		2: "two",
 	}
 	output := []int{0, 1, 4}
-	keySquares := Keys[int, string, int](input).
+	keySquares := fork.Keys[int, string, int](input).
 		ToSlice(squareFn)
 
 	assert.Equal(t, output, sorted(keySquares))
@@ -123,7 +124,7 @@ func TestForkMapValuesToSlice(t *testing.T) {
 		"two":  2,
 	}
 	output := []int{0, 1, 4}
-	valueSquares := Values[string, int, int](input).
+	valueSquares := fork.Values[string, int, int](input).
 		ToSlice(squareFn)
 
 	assert.Equal(t, output, sorted(valueSquares))
@@ -132,7 +133,7 @@ func TestForkMapValuesToSlice(t *testing.T) {
 func TestForkDoesntAllowNoParallelism(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
 	output := []int{0, 1, 4, 9, 16, 25}
-	squares := Slice[int, int](input).
+	squares := fork.Slice[int, int](input).
 		Parallelism(0).
 		ToSlice(squareFn)
 
