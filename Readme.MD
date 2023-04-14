@@ -14,30 +14,30 @@ This seems to be a recurring pattern that results in lots of copy/paste code
 Fork from slice with parallelism of 3 and join results into a channel
 ```go
 input := []int{1, 2, 3}
-squares := Slice[int, int](input).
+squares := fork.Slice[int, int](input).
     Parallelism(3).
-    ToChan(func(input int) (int, bool) {
-        return input*input, false
+    ToChan(func(value int) (int, bool) {
+        return value*value, false
     })
 ```
 
-Fork from a chan and get the result as a slice
+Fork from a channel and get the result as a slice
 ```go
 input := make(chan int)
-squares := Slice[int, int](input).
+squares := fork.Chan[int, int](input).
     Parallelism(3).
-    ToSlice(func(input int) (int, bool) {
-        return input*input, false
+    ToSlice(func(value int) (int, bool) {
+        return value*value, false
     })
 ```
 
 Signal an early exit
 ```go
 input := []int{1, 2, 3}
-squares := Slice[int, int](input).
+squares := fork.Slice[int, int](input).
     Parallelism(3).
-    ToChan(func(input int) (int, bool) {
-        return input*input, true // This signals that we want to stop
+    ToChan(func(value int) (int, bool) {
+        return value*value, true // This signals that we want to stop. Maybe be triggered by an error... who knows
     })
 ```
 
@@ -48,9 +48,9 @@ input := map[string]int{
     "one":  1,
     "two":  2,
 }
-valueSquares := Values[string, int, int](input).
-    ToChan(func(input int) (int, bool) {
-        return input*input, false
+valueSquares := fork.Values[string, int, int](input).
+    ToChan(func(value int) (int, bool) {
+        return value*value, false
     })
 ```
 Fork from map keys to a channel
@@ -60,8 +60,8 @@ input := map[int]string{
     1: "one",
     2: "two",
 }
-keySquares := Keys[int, string, int](input).
-    ToSlice(func(input int) (int, bool) {
-        return input*input, false
+keySquares := fork.Keys[int, string, int](input).
+    ToSlice(func(value int) (int, bool) {
+        return value*value, false
     })
 ```
