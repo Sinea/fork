@@ -14,10 +14,10 @@ type Fork[IN, OUT any] interface {
 	Parallelism(parallelism int) Fork[IN, OUT]
 
 	// JoinSlice returns the processing results as a slice
-	JoinSlice(func(_ IN) (OUT, bool)) []OUT
+	JoinSlice(func(input IN) (output OUT, terminate bool)) []OUT
 
 	// JoinChan returns the processing results as a chan
-	JoinChan(func(_ IN) (OUT, bool)) <-chan OUT
+	JoinChan(func(input IN) (output OUT, terminate bool)) <-chan OUT
 }
 
 type fork[IN, OUT any] struct {
@@ -49,27 +49,28 @@ func (f *fork[IN, OUT]) JoinSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	wg.Add(f.numGoroutines())
 	isRunning.Store(true)
 	f.iterator.Open()
+	defer f.iterator.Close()
 	for i := 0; i < f.numGoroutines(); i++ {
 		go func() {
+			defer wg.Done()
 			for isRunning.Load() {
 				value, hasMore := f.iterator.Next()
 				if !hasMore {
 					break
 				}
-				result, stopIteration := transformer(value)
-				if stopIteration {
+				result, terminate := transformer(value)
+				if terminate {
 					isRunning.Store(false)
 				}
 				lock.Lock()
 				results = append(results, result)
 				lock.Unlock()
 			}
-			wg.Done()
 		}()
 	}
 
 	wg.Wait()
-	f.iterator.Close()
+
 	return results
 }
 
@@ -85,6 +86,9 @@ func (f *fork[IN, OUT]) JoinChan(transformer func(_ IN) (OUT, bool)) <-chan OUT 
 		isRunning.Store(true)
 		f.iterator.Open()
 		defer close(results)
+		defer f.iterator.Close()
+		defer wg.Wait()
+
 		for i := 0; i < f.numGoroutines(); i++ {
 			go func() {
 				for isRunning.Load() {
@@ -92,8 +96,8 @@ func (f *fork[IN, OUT]) JoinChan(transformer func(_ IN) (OUT, bool)) <-chan OUT 
 					if !hasMore {
 						break
 					}
-					result, stopIteration := transformer(value)
-					if stopIteration {
+					result, terminate := transformer(value)
+					if terminate {
 						isRunning.Store(false)
 						break
 					}
@@ -102,9 +106,6 @@ func (f *fork[IN, OUT]) JoinChan(transformer func(_ IN) (OUT, bool)) <-chan OUT 
 				wg.Done()
 			}()
 		}
-
-		wg.Wait()
-		f.iterator.Close()
 	}()
 	return results
 }
