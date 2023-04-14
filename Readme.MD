@@ -13,11 +13,11 @@ This seems to be a recurring pattern that results in lots of copy/paste code
 
 Fork from slice with parallelism of 3 and join results into a channel
 ```go
-input := []int{1, 2, 3}
-squares := fork.Slice[int, int](input).
+input := []string{"dog", "cat", "moose"}
+lengths := fork.Slice[string, int](input).
     Parallelism(3).
-    ToChan(func(value int) (int, bool) {
-        return value*value, false
+    ToChan(func(value string) (int, bool) {
+        return len(value), false
     })
 ```
 
