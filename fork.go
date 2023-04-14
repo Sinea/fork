@@ -7,37 +7,6 @@ import (
 
 const defaultParallelism = 1
 
-// Iterator returns values or false if n more values are present
-type Iterator[T any] interface {
-	Next() (T, bool)
-}
-
-type chanIterator[T any] struct {
-	channel <-chan T
-}
-
-func (c *chanIterator[T]) Next() (T, bool) {
-	value, ok := <-c.channel
-	return value, ok
-}
-
-type sliceIterator[T any] struct {
-	sync.Mutex
-	slice []T
-	index int
-}
-
-func (s *sliceIterator[T]) Next() (T, bool) {
-	s.Lock()
-	defer s.Unlock()
-	if s.index >= len(s.slice) {
-		var t T
-		return t, false
-	}
-	s.index++
-	return s.slice[s.index-1], true
-}
-
 // Fork object
 type Fork[IN, OUT any] interface {
 
@@ -51,6 +20,7 @@ type Fork[IN, OUT any] interface {
 	ToChan(func(_ IN) (OUT, bool)) <-chan OUT
 }
 
+// Slice source
 func Slice[IN, OUT any](input []IN) Fork[IN, OUT] {
 	return &fork[IN, OUT]{
 		iter: &sliceIterator[IN]{
@@ -60,6 +30,7 @@ func Slice[IN, OUT any](input []IN) Fork[IN, OUT] {
 	}
 }
 
+// Chan souce
 func Chan[IN, OUT any](input <-chan IN) Fork[IN, OUT] {
 	return &fork[IN, OUT]{
 		iter: &chanIterator[IN]{
@@ -69,29 +40,25 @@ func Chan[IN, OUT any](input <-chan IN) Fork[IN, OUT] {
 	}
 }
 
-func Keys[K comparable, V any, OUT any](m map[K]V) Fork[K, OUT] {
-	inputChannel := make(chan K, len(m))
-	for key := range m {
-		inputChannel <- key
-	}
-	close(inputChannel)
+// Keys of map source
+func Keys[K comparable, V any, OUT any](input map[K]V) Fork[K, OUT] {
 	return &fork[K, OUT]{
-		iter: &chanIterator[K]{
-			channel: inputChannel,
+		iter: &mapKeyIterator[K, V]{
+			sourceMap: input,
+			keys:      make(chan K),
+			done:      make(chan struct{}),
 		},
 		parallelism: defaultParallelism,
 	}
 }
 
-func Values[K comparable, V any, OUT any](m map[K]V) Fork[V, OUT] {
-	inputChannel := make(chan V, len(m))
-	for _, value := range m {
-		inputChannel <- value
-	}
-	close(inputChannel)
+// Values of map source
+func Values[K comparable, V any, OUT any](input map[K]V) Fork[V, OUT] {
 	return &fork[V, OUT]{
-		iter: &chanIterator[V]{
-			channel: inputChannel,
+		iter: &mapValueIterator[K, V]{
+			sourceMap: input,
+			values:    make(chan V),
+			done:      make(chan struct{}),
 		},
 		parallelism: defaultParallelism,
 	}
@@ -102,6 +69,7 @@ type fork[IN, OUT any] struct {
 	iter        Iterator[IN]
 }
 
+// Parallelism setter
 func (f *fork[IN, OUT]) Parallelism(parallelism int) Fork[IN, OUT] {
 	if parallelism < defaultParallelism {
 		parallelism = defaultParallelism
@@ -110,6 +78,7 @@ func (f *fork[IN, OUT]) Parallelism(parallelism int) Fork[IN, OUT] {
 	return f
 }
 
+// ToSlice transforms and returns the results as a slice
 func (f *fork[IN, OUT]) ToSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	wg := sync.WaitGroup{}
 	wg.Add(f.parallelism)
@@ -119,6 +88,7 @@ func (f *fork[IN, OUT]) ToSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	)
 	isRunning := atomic.Bool{}
 	isRunning.Store(true)
+	f.iter.Open()
 	for i := 0; i < f.parallelism; i++ {
 		go func() {
 			for isRunning.Load() {
@@ -139,10 +109,11 @@ func (f *fork[IN, OUT]) ToSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	}
 
 	wg.Wait()
-
+	f.iter.Close()
 	return results
 }
 
+// ToChan transforms and returns the results as a channel
 func (f *fork[IN, OUT]) ToChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
 	results := make(chan OUT)
 	go func() {
@@ -150,6 +121,7 @@ func (f *fork[IN, OUT]) ToChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
 		wg.Add(f.parallelism)
 		isRunning := atomic.Bool{}
 		isRunning.Store(true)
+		f.iter.Open()
 		for i := 0; i < f.parallelism; i++ {
 			go func() {
 				for isRunning.Load() {
@@ -169,6 +141,7 @@ func (f *fork[IN, OUT]) ToChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
 		}
 
 		wg.Wait()
+		f.iter.Close()
 		close(results)
 	}()
 	return results
