@@ -7,68 +7,17 @@ import (
 
 const defaultParallelism = 1
 
-// Fork object
+// Fork ...
 type Fork[IN, OUT any] interface {
 
 	// Parallelism sets the number of goroutines to be used
 	Parallelism(parallelism int) Fork[IN, OUT]
 
-	// ToSlice returns the processing results as a slice
-	ToSlice(func(_ IN) (OUT, bool)) []OUT
+	// JoinSlice returns the processing results as a slice
+	JoinSlice(func(_ IN) (OUT, bool)) []OUT
 
-	// ToChan returns the processing results as a chan
-	ToChan(func(_ IN) (OUT, bool)) <-chan OUT
-}
-
-func Iter[IN, OUT any](input Iterator[IN]) Fork[IN, OUT] {
-	return &fork[IN, OUT]{
-		iterator:    input,
-		parallelism: defaultParallelism,
-	}
-}
-
-// Slice source
-func Slice[IN, OUT any](input []IN) Fork[IN, OUT] {
-	return &fork[IN, OUT]{
-		iterator: &sliceIterator[IN]{
-			slice: input,
-		},
-		parallelism: defaultParallelism,
-	}
-}
-
-// Chan souce
-func Chan[IN, OUT any](input <-chan IN) Fork[IN, OUT] {
-	return &fork[IN, OUT]{
-		iterator: &chanIterator[IN]{
-			channel: input,
-		},
-		parallelism: defaultParallelism,
-	}
-}
-
-// Keys of map source
-func Keys[K comparable, V any, OUT any](input map[K]V) Fork[K, OUT] {
-	return &fork[K, OUT]{
-		iterator: &mapKeyIterator[K, V]{
-			sourceMap: input,
-			keys:      make(chan K),
-			done:      make(chan struct{}),
-		},
-		parallelism: defaultParallelism,
-	}
-}
-
-// Values of map source
-func Values[K comparable, V any, OUT any](input map[K]V) Fork[V, OUT] {
-	return &fork[V, OUT]{
-		iterator: &mapValueIterator[K, V]{
-			sourceMap: input,
-			values:    make(chan V),
-			done:      make(chan struct{}),
-		},
-		parallelism: defaultParallelism,
-	}
+	// JoinChan returns the processing results as a chan
+	JoinChan(func(_ IN) (OUT, bool)) <-chan OUT
 }
 
 type fork[IN, OUT any] struct {
@@ -76,27 +25,31 @@ type fork[IN, OUT any] struct {
 	iterator    Iterator[IN]
 }
 
+func (f *fork[IN, OUT]) numGoroutines() int {
+	if f.parallelism < defaultParallelism {
+		return defaultParallelism
+	}
+	return f.parallelism
+}
+
 // Parallelism setter
 func (f *fork[IN, OUT]) Parallelism(parallelism int) Fork[IN, OUT] {
-	if parallelism < defaultParallelism {
-		parallelism = defaultParallelism
-	}
 	f.parallelism = parallelism
 	return f
 }
 
-// ToSlice transforms and returns the results as a slice
-func (f *fork[IN, OUT]) ToSlice(transformer func(_ IN) (OUT, bool)) []OUT {
-	wg := sync.WaitGroup{}
-	wg.Add(f.parallelism)
+// JoinSlice transforms and returns the results as a slice
+func (f *fork[IN, OUT]) JoinSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	var (
-		results []OUT
-		lock    sync.Mutex
+		results   []OUT
+		lock      sync.Mutex
+		wg        sync.WaitGroup
+		isRunning atomic.Bool
 	)
-	isRunning := atomic.Bool{}
+	wg.Add(f.numGoroutines())
 	isRunning.Store(true)
 	f.iterator.Open()
-	for i := 0; i < f.parallelism; i++ {
+	for i := 0; i < f.numGoroutines(); i++ {
 		go func() {
 			for isRunning.Load() {
 				value, hasMore := f.iterator.Next()
@@ -120,16 +73,19 @@ func (f *fork[IN, OUT]) ToSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	return results
 }
 
-// ToChan transforms and returns the results as a channel
-func (f *fork[IN, OUT]) ToChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
+// JoinChan transforms and returns the results as a channel
+func (f *fork[IN, OUT]) JoinChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
 	results := make(chan OUT)
 	go func() {
-		wg := sync.WaitGroup{}
-		wg.Add(f.parallelism)
-		isRunning := atomic.Bool{}
+		var (
+			wg        = sync.WaitGroup{}
+			isRunning = atomic.Bool{}
+		)
+		wg.Add(f.numGoroutines())
 		isRunning.Store(true)
 		f.iterator.Open()
-		for i := 0; i < f.parallelism; i++ {
+		defer close(results)
+		for i := 0; i < f.numGoroutines(); i++ {
 			go func() {
 				for isRunning.Load() {
 					value, hasMore := f.iterator.Next()
@@ -149,7 +105,6 @@ func (f *fork[IN, OUT]) ToChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
 
 		wg.Wait()
 		f.iterator.Close()
-		close(results)
 	}()
 	return results
 }

@@ -11,9 +11,10 @@ import (
 func TestForkSliceToSlice(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
 	output := []int{0, 1, 4, 9, 16, 25}
-	squares := fork.Slice[int, int](input).
+	squares := fork.
+		Slice[int, int](input).
 		Parallelism(3).
-		ToSlice(squareFn)
+		JoinSlice(squareFn)
 
 	assert.Equal(t, output, sorted(squares))
 }
@@ -21,9 +22,10 @@ func TestForkSliceToSlice(t *testing.T) {
 func TestForkSliceToChan(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
 	output := []int{0, 1, 4, 9, 16, 25}
-	squares := fork.Slice[int, int](input).
+	squares := fork.
+		Slice[int, int](input).
 		Parallelism(3).
-		ToChan(squareFn)
+		JoinChan(squareFn)
 	var result []int
 	for {
 		square, ok := <-squares
@@ -45,9 +47,10 @@ func TestForkFromChanToSlice(t *testing.T) {
 	}
 	close(input)
 
-	squares := fork.Chan[int, int](input).
+	squares := fork.
+		Chan[int, int](input).
 		Parallelism(2).
-		ToSlice(squareFn)
+		JoinSlice(squareFn)
 
 	assert.Equal(t, output, sorted(squares))
 }
@@ -61,9 +64,10 @@ func TestForkFromChanToChan(t *testing.T) {
 	}
 	close(input)
 
-	squares := fork.Chan[int, int](input).
+	squares := fork.
+		Chan[int, int](input).
 		Parallelism(2).
-		ToChan(squareFn)
+		JoinChan(squareFn)
 
 	var result []int
 	for {
@@ -79,9 +83,10 @@ func TestForkFromChanToChan(t *testing.T) {
 
 func TestForkEarlyExitOnSlice(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
-	squares := fork.Slice[int, int](input).
+	squares := fork.
+		Slice[int, int](input).
 		Parallelism(3).
-		ToSlice(func(_ int) (int, bool) {
+		JoinSlice(func(_ int) (int, bool) {
 			return 0, true
 		})
 
@@ -95,9 +100,10 @@ func TestForkEarlyExitOnChan(t *testing.T) {
 		input <- i
 	}
 	close(input)
-	squares := fork.Chan[int, int](input).
+	squares := fork.
+		Chan[int, int](input).
 		Parallelism(3).
-		ToChan(func(_ int) (int, bool) {
+		JoinChan(func(_ int) (int, bool) {
 			return 0, true
 		})
 
@@ -111,8 +117,9 @@ func TestForkMapKeysToSlice(t *testing.T) {
 		2: "two",
 	}
 	output := []int{0, 1, 4}
-	keySquares := fork.Keys[int, string, int](input).
-		ToSlice(squareFn)
+	keySquares := fork.
+		Keys[int, string, int](input).
+		JoinSlice(squareFn)
 
 	assert.Equal(t, output, sorted(keySquares))
 }
@@ -124,8 +131,9 @@ func TestForkMapValuesToSlice(t *testing.T) {
 		"two":  2,
 	}
 	output := []int{0, 1, 4}
-	valueSquares := fork.Values[string, int, int](input).
-		ToSlice(squareFn)
+	valueSquares := fork.
+		Values[string, int, int](input).
+		JoinSlice(squareFn)
 
 	assert.Equal(t, output, sorted(valueSquares))
 }
@@ -133,11 +141,24 @@ func TestForkMapValuesToSlice(t *testing.T) {
 func TestForkDoesntAllowNoParallelism(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
 	output := []int{0, 1, 4, 9, 16, 25}
-	squares := fork.Slice[int, int](input).
+	squares := fork.
+		Slice[int, int](input).
 		Parallelism(0).
-		ToSlice(squareFn)
+		JoinSlice(squareFn)
 
 	assert.Equal(t, output, squares)
+}
+
+func TestForkFromCustomIterator(t *testing.T) {
+	source := &customIterator{value: "test"}
+	lengths := fork.
+		Iter[string, int](source).
+		JoinSlice(func(value string) (int, bool) {
+			return len(value), true
+		})
+
+	assert.Equal(t, 1, len(lengths))
+	assert.Equal(t, len(source.value), lengths[0])
 }
 
 func squareFn(input int) (int, bool) {
@@ -149,4 +170,23 @@ func sorted(values []int) []int {
 		return values[i] < values[j]
 	})
 	return values
+}
+
+type customIterator struct {
+	yielded bool
+	value   string
+}
+
+func (c *customIterator) Open() {
+}
+
+func (c *customIterator) Close() {
+}
+
+func (c *customIterator) Next() (string, bool) {
+	if c.yielded {
+		return "", false
+	}
+	c.yielded = true
+	return c.value, true
 }
