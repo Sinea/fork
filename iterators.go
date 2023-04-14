@@ -4,8 +4,13 @@ import "sync"
 
 // Iterator returns values or false if n more values are present
 type Iterator[T any] interface {
+	// Open the iterator
 	Open()
+
+	// Close the iterator
 	Close()
+
+	// Next value
 	Next() (T, bool)
 }
 

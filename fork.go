@@ -20,10 +20,17 @@ type Fork[IN, OUT any] interface {
 	ToChan(func(_ IN) (OUT, bool)) <-chan OUT
 }
 
+func Iter[IN, OUT any](input Iterator[IN]) Fork[IN, OUT] {
+	return &fork[IN, OUT]{
+		iterator:    input,
+		parallelism: defaultParallelism,
+	}
+}
+
 // Slice source
 func Slice[IN, OUT any](input []IN) Fork[IN, OUT] {
 	return &fork[IN, OUT]{
-		iter: &sliceIterator[IN]{
+		iterator: &sliceIterator[IN]{
 			slice: input,
 		},
 		parallelism: defaultParallelism,
@@ -33,7 +40,7 @@ func Slice[IN, OUT any](input []IN) Fork[IN, OUT] {
 // Chan souce
 func Chan[IN, OUT any](input <-chan IN) Fork[IN, OUT] {
 	return &fork[IN, OUT]{
-		iter: &chanIterator[IN]{
+		iterator: &chanIterator[IN]{
 			channel: input,
 		},
 		parallelism: defaultParallelism,
@@ -43,7 +50,7 @@ func Chan[IN, OUT any](input <-chan IN) Fork[IN, OUT] {
 // Keys of map source
 func Keys[K comparable, V any, OUT any](input map[K]V) Fork[K, OUT] {
 	return &fork[K, OUT]{
-		iter: &mapKeyIterator[K, V]{
+		iterator: &mapKeyIterator[K, V]{
 			sourceMap: input,
 			keys:      make(chan K),
 			done:      make(chan struct{}),
@@ -55,7 +62,7 @@ func Keys[K comparable, V any, OUT any](input map[K]V) Fork[K, OUT] {
 // Values of map source
 func Values[K comparable, V any, OUT any](input map[K]V) Fork[V, OUT] {
 	return &fork[V, OUT]{
-		iter: &mapValueIterator[K, V]{
+		iterator: &mapValueIterator[K, V]{
 			sourceMap: input,
 			values:    make(chan V),
 			done:      make(chan struct{}),
@@ -66,7 +73,7 @@ func Values[K comparable, V any, OUT any](input map[K]V) Fork[V, OUT] {
 
 type fork[IN, OUT any] struct {
 	parallelism int
-	iter        Iterator[IN]
+	iterator    Iterator[IN]
 }
 
 // Parallelism setter
@@ -88,11 +95,11 @@ func (f *fork[IN, OUT]) ToSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	)
 	isRunning := atomic.Bool{}
 	isRunning.Store(true)
-	f.iter.Open()
+	f.iterator.Open()
 	for i := 0; i < f.parallelism; i++ {
 		go func() {
 			for isRunning.Load() {
-				value, hasMore := f.iter.Next()
+				value, hasMore := f.iterator.Next()
 				if !hasMore {
 					break
 				}
@@ -109,7 +116,7 @@ func (f *fork[IN, OUT]) ToSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	}
 
 	wg.Wait()
-	f.iter.Close()
+	f.iterator.Close()
 	return results
 }
 
@@ -121,11 +128,11 @@ func (f *fork[IN, OUT]) ToChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
 		wg.Add(f.parallelism)
 		isRunning := atomic.Bool{}
 		isRunning.Store(true)
-		f.iter.Open()
+		f.iterator.Open()
 		for i := 0; i < f.parallelism; i++ {
 			go func() {
 				for isRunning.Load() {
-					value, hasMore := f.iter.Next()
+					value, hasMore := f.iterator.Next()
 					if !hasMore {
 						break
 					}
@@ -141,7 +148,7 @@ func (f *fork[IN, OUT]) ToChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
 		}
 
 		wg.Wait()
-		f.iter.Close()
+		f.iterator.Close()
 		close(results)
 	}()
 	return results
