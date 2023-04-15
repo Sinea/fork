@@ -1,0 +1,37 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+jobs:
+
+  build:
+    name: ${{ matrix.config.name }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+            name: "Go 1.19.x",
+            version: "1.19.x",
+          }
+          - {
+            name: "Go 1.x",
+            version: "1.x",
+          }
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: ${{ matrix.config.version }}
+
+    - name: Test
+      run: go test -race -cover -v
