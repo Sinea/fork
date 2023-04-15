@@ -2,8 +2,7 @@ package fork
 
 func Iter[IN, OUT any](input Iterator[IN]) Fork[IN, OUT] {
 	return &fork[IN, OUT]{
-		iterator:    input,
-		parallelism: defaultParallelism,
+		iterator: input,
 	}
 }
 
@@ -13,7 +12,6 @@ func Slice[IN, OUT any](input []IN) Fork[IN, OUT] {
 		iterator: &sliceIterator[IN]{
 			slice: input,
 		},
-		parallelism: defaultParallelism,
 	}
 }
 
@@ -23,7 +21,6 @@ func Chan[IN, OUT any](input <-chan IN) Fork[IN, OUT] {
 		iterator: &chanIterator[IN]{
 			channel: input,
 		},
-		parallelism: defaultParallelism,
 	}
 }
 
@@ -35,7 +32,6 @@ func Keys[K comparable, V any, OUT any](input map[K]V) Fork[K, OUT] {
 			keys:      make(chan K),
 			done:      make(chan struct{}),
 		},
-		parallelism: defaultParallelism,
 	}
 }
 
@@ -47,6 +43,5 @@ func Values[K comparable, V any, OUT any](input map[K]V) Fork[V, OUT] {
 			values:    make(chan V),
 			done:      make(chan struct{}),
 		},
-		parallelism: defaultParallelism,
 	}
 }

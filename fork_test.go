@@ -13,7 +13,7 @@ func TestForkSliceToSlice(t *testing.T) {
 	output := []int{0, 1, 4, 9, 16, 25}
 	squares := fork.
 		Slice[int, int](input).
-		Parallelism(3).
+		Concurrency(3).
 		JoinSlice(squareFn)
 
 	assert.Equal(t, output, sorted(squares))
@@ -24,7 +24,7 @@ func TestForkSliceToChan(t *testing.T) {
 	output := []int{0, 1, 4, 9, 16, 25}
 	squares := fork.
 		Slice[int, int](input).
-		Parallelism(3).
+		Concurrency(3).
 		JoinChan(squareFn)
 	var result []int
 	for {
@@ -49,7 +49,7 @@ func TestForkFromChanToSlice(t *testing.T) {
 
 	squares := fork.
 		Chan[int, int](input).
-		Parallelism(2).
+		Concurrency(2).
 		JoinSlice(squareFn)
 
 	assert.Equal(t, output, sorted(squares))
@@ -66,7 +66,7 @@ func TestForkFromChanToChan(t *testing.T) {
 
 	squares := fork.
 		Chan[int, int](input).
-		Parallelism(2).
+		Concurrency(2).
 		JoinChan(squareFn)
 
 	var result []int
@@ -85,7 +85,7 @@ func TestForkEarlyExitOnSlice(t *testing.T) {
 	input := []int{0, 1, 2, 3, 4, 5}
 	squares := fork.
 		Slice[int, int](input).
-		Parallelism(3).
+		Concurrency(3).
 		JoinSlice(func(_ int) (int, bool) {
 			return 0, true
 		})
@@ -102,7 +102,7 @@ func TestForkEarlyExitOnChan(t *testing.T) {
 	close(input)
 	squares := fork.
 		Chan[int, int](input).
-		Parallelism(3).
+		Concurrency(3).
 		JoinChan(func(_ int) (int, bool) {
 			return 0, true
 		})
@@ -143,7 +143,7 @@ func TestForkDoesntAllowNoParallelism(t *testing.T) {
 	output := []int{0, 1, 4, 9, 16, 25}
 	squares := fork.
 		Slice[int, int](input).
-		Parallelism(0).
+		Concurrency(0).
 		JoinSlice(squareFn)
 
 	assert.Equal(t, output, squares)
