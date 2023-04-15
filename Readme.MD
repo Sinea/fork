@@ -22,8 +22,8 @@ lengths := fork.
 	Slice[string, int](input).
 	Parallelism(3).
 	JoinChan(func(value string) (int, bool) {
-        return len(value), false
-    })
+		return len(value), false
+	})
 ```
 
 Fork from a channel and get the result as a slice
@@ -33,8 +33,8 @@ squares := fork.
 	Chan[int, int](input).
 	Parallelism(3).
 	JoinSlice(func(value int) (int, bool) {
-        return value*value, false
-    })
+		return value*value, false
+	})
 ```
 
 Signal an early exit
@@ -44,8 +44,9 @@ squares := fork.
 	Slice[int, int](input).
 	Parallelism(3).
 	JoinChan(func(value int) (int, bool) {
-        return value*value, true // This signals that we want to stop. Maybe be triggered by an error... who knows
-    })
+		// This signals that we want to stop. Maybe be triggered by an error... who knows
+		return value*value, true 
+	})
 ```
 
 Fork from map values to a channel
@@ -59,7 +60,7 @@ valueSquares := fork.
 	Values[string, int, int](input).
 	JoinChan(func(value int) (int, bool) {
 		return value*value, false
-    })
+	})
 ```
 Fork from map keys to a channel
 ```go
@@ -72,12 +73,39 @@ keySquares := fork.
 	Keys[int, string, int](input).
 	JoinSlice(func(value int) (int, bool) {
 		return value*value, false
-    })
+	})
 ```
 
 Fork from a custom iterator
 ```go
-_ = fork.
-	Iter(your custom iterator).
-	JoinSlice(your custom transformation)
+type tickerIterator struct {
+    ticker   *time.Ticker
+    deadline time.Time
+}
+
+func (c *tickerIterator) Open() {
+}
+
+func (c *tickerIterator) Close() {
+    c.ticker.Stop()
+}
+
+func (c *tickerIterator) Next() (*time.Time, bool) {
+    t, ok := <-c.ticker.C
+    if time.Now().After(c.deadline) {
+        return nil, false
+    }
+    return &t, ok
+}
+
+source := &tickerIterator{
+    ticker:   time.NewTicker(time.Second),
+    deadline: time.Now().Add(time.Second * 5),
+}
+output := fork.Iter[*time.Time, int64](source).
+    JoinSlice(func(input *time.Time) (output int64, terminate bool) {
+        return input.UnixMilli(), false
+    })
+// output should contain the unix millis from the ticker generated time.Time
+fmt.Println(output)
 ```
