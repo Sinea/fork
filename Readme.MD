@@ -15,12 +15,12 @@ This seems to be a recurring pattern that results in lots of copy/paste code
 
 #### Examples
 
-Fork from slice with parallelism of 3 and join results into a channel
+Fork from slice with concurrency of 3 and join results into a channel
 ```go
 input := []string{"dog", "cat", "moose"}
 lengths := fork.
 	Slice[string, int](input).
-	Parallelism(3).
+	Concurrency(3).
 	JoinChan(func(value string) (int, bool) {
 		return len(value), false
 	})
@@ -31,7 +31,7 @@ Fork from a channel and get the result as a slice
 input := make(chan int)
 squares := fork.
 	Chan[int, int](input).
-	Parallelism(3).
+	Concurrency(3).
 	JoinSlice(func(value int) (int, bool) {
 		return value*value, false
 	})
@@ -42,7 +42,7 @@ Signal an early exit
 input := []int{1, 2, 3}
 squares := fork.
 	Slice[int, int](input).
-	Parallelism(3).
+	Concurrency(3).
 	JoinChan(func(value int) (int, bool) {
 		// This signals that we want to stop. Maybe be triggered by an error... who knows
 		return value*value, true 
