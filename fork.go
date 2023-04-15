@@ -10,8 +10,8 @@ const defaultParallelism = 1
 // Fork ...
 type Fork[IN, OUT any] interface {
 
-	// Parallelism sets the number of goroutines to be used
-	Parallelism(parallelism int) Fork[IN, OUT]
+	// Concurrency sets the number of goroutines to be used
+	Concurrency(numGoroutines int) Fork[IN, OUT]
 
 	// JoinSlice returns the processing results as a slice
 	JoinSlice(func(input IN) (output OUT, terminate bool)) []OUT
@@ -21,24 +21,24 @@ type Fork[IN, OUT any] interface {
 }
 
 type fork[IN, OUT any] struct {
-	parallelism int
-	iterator    Iterator[IN]
+	routineCount int
+	iterator     Iterator[IN]
 }
 
 func (f *fork[IN, OUT]) numGoroutines() int {
-	if f.parallelism < defaultParallelism {
+	if f.routineCount < defaultParallelism {
 		return defaultParallelism
 	}
-	return f.parallelism
+	return f.routineCount
 }
 
-// Parallelism setter
-func (f *fork[IN, OUT]) Parallelism(parallelism int) Fork[IN, OUT] {
-	f.parallelism = parallelism
+// Concurrency ...
+func (f *fork[IN, OUT]) Concurrency(numGoroutines int) Fork[IN, OUT] {
+	f.routineCount = numGoroutines
 	return f
 }
 
-// JoinSlice transforms and returns the results as a slice
+// JoinSlice ...
 func (f *fork[IN, OUT]) JoinSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	var (
 		results   []OUT
@@ -74,7 +74,7 @@ func (f *fork[IN, OUT]) JoinSlice(transformer func(_ IN) (OUT, bool)) []OUT {
 	return results
 }
 
-// JoinChan transforms and returns the results as a channel
+// JoinChan ...
 func (f *fork[IN, OUT]) JoinChan(transformer func(_ IN) (OUT, bool)) <-chan OUT {
 	results := make(chan OUT)
 	go func() {
