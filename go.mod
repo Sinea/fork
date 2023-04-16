@@ -1,4 +1,4 @@
-module fork
+module github.com/Sinea/fork
 
 go 1.19
 
