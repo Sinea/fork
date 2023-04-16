@@ -1,10 +1,10 @@
 package fork_test
 
 import (
-	"fork"
 	"sort"
 	"testing"
 
+	"github.com/Sinea/fork"
 	"github.com/stretchr/testify/assert"
 )
 
