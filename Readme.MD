@@ -3,6 +3,11 @@
 ### A micro library for in-memory fork join
 This seems to be a recurring pattern that results in lots of copy/paste code
 
+#### Install
+```shell
+go get github.com/Sinea/fork
+```
+
 #### Supported sources
 * Slice
 * Chan
